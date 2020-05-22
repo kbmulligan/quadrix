@@ -203,7 +203,7 @@ keyLeft.release = function() {
 };
 
 keyUp.press = function() {
-    activeBlock.rotate();
+    activeBlock.rotate(frozenGrid);
 };
 keyUp.release = function() {
     ;
@@ -598,9 +598,20 @@ activeBlock.rot = 1;
 activeBlock.height = activeBlock.pattern[activeBlock.rot].length;
 activeBlock.width = activeBlock.pattern[activeBlock.rot][0].length;
 
-activeBlock.rotate = function() {
+activeBlock.rotate = function(g) {
     activeBlock.rot += 1;
-    activeBlock.rot = activeBlock.rot % activeBlock.pattern.length; 
+    if (activeBlock.rot >= activeBlock.pattern.length) {
+        activeBlock.rot = 0;
+    }
+
+    let proposedGrid = addGrids(activeBlock, g);
+    if (hasOverlap(proposedGrid)) {
+        activeBlock.rot -= 1;
+        if (activeBlock.rot < 0) {
+            activeBlock.rot = activeBlock.pattern.length - 1;
+        }
+        //console.log("ROTATE NOT A GREAT IDEA");
+    }
 
     //console.log("ROTATE: ", activeBlock.rot);
 };
@@ -618,7 +629,6 @@ activeBlock.moveRight = function(g) {
     //activeBlock.x = Math.min(activeBlock.x, cols - activeBlock.width); 
 
     let proposedGrid = addGrids(activeBlock, g);
-
     if (hasOverlap(proposedGrid)) {
         activeBlock.x -= 1;
         //console.log("BLOCK RIGHT NOT A GREAT IDEA");
