@@ -1,4 +1,4 @@
-/** quadrix.js - A classic tetris clone written in javascript 
+/** quadrix.js - A classic arcade clone written in javascript 
  *                       using the Pixi.js and Tink libraries.
  *
  *                       Pixi.js - http://www.pixijs.com/ 
@@ -54,9 +54,13 @@ var textColor = white;
 // Primitive vars
 var blockLength = 20,
     blockWidth = 22,
-    blockMargin = 4;
+    blockMargin = 2;
 
 const EMPTY = 0;
+const FULL = 1;
+const FLOOR = 5;
+const WALL = 5;
+
 
 // Games vars
 var state = pause,
@@ -69,10 +73,10 @@ let gameTime = 0;
 let gameTick = 500;     
 
 // Board vars
-let rows = 25;
-let cols = 10;
+let rows = 30;
+let cols = 15;
 
-let gridOffsetX = innerWidth/2 - ((blockWidth + blockMargin) * cols/2);
+let gridOffsetX = innerWidth * 0.5 - ((blockWidth + blockMargin) * (cols - WALL)/2);
 let gridOffsetY = 50;
 
 // AI/Cheat
@@ -184,7 +188,8 @@ var keyEnter = keyboard(enter);
 var keyEsc = keyboard(esc);
 
 keyRight.press = function() {
-    activeBlock.moveRight();
+    
+    activeBlock.moveRight(frozenGrid);
 };
 keyRight.release = function() {
     ;
@@ -205,7 +210,7 @@ keyUp.release = function() {
 };
 
 keyDown.press = function() {
-    ;
+    dropOne(activeBlock);
 };
 keyDown.release = function() {
     ;
@@ -222,8 +227,9 @@ keySpace.press = function() {
     ;
 };
 keySpace.release = function() {
-    //togglePause();
-    randomizeGrid(frozenGrid);
+    togglePause();
+    //randomizeGrid(frozenGrid);
+    ;
 };
 
 keyEnter.press = function() {
@@ -241,7 +247,8 @@ pointer.tap = function () {
 
 pointer.press = function () {
     // console.log("The pointer was pressed.");
-    togglePause();
+    // togglePause();
+    ; 
 };
 
 pointer.release = function () {
@@ -374,8 +381,8 @@ function makeCircle (initx, inity, radius, color) {
     return circle;
 }
 
-function makeBlock (initx, inity) {
-    var block = makeRectangle(initx, inity, blockWidth, blockWidth, blockColor)
+function makeBlock (initx, inity, color) {
+    var block = makeRectangle(initx, inity, blockWidth, blockWidth, color)
     return block;
 }
 
@@ -383,9 +390,11 @@ function makeBlock (initx, inity) {
 // create grid and all possible blocks in the grid
 let frozenGrid = [];
 let blocks = [];
+let blocksBackground = [];
 
 initGrid(frozenGrid);
-initBlocks(blocks);
+initBlocks(blocks, blockColor);
+initBlocks(blocksBackground, black);
 drawGrid(frozenGrid, blocks);
 
 // initialize grid with blocks 
@@ -393,21 +402,23 @@ function initGrid (grid) {
     for (var i = 0; i < rows; i++) {
         grid.push([]);
         for (var j = 0; j < cols; j++) {
-
-            // random at first just for testing
             grid[i].push(EMPTY); 
+            if (i < FLOOR || j > cols - WALL - 1) {
+                grid[i][j] = FULL; 
+            }
         }
     }
 }
 
 // initialize all graphical blocks 
-function initBlocks (blocks) {
+function initBlocks (blocks, color) {
     for (var i = 0; i < rows; i++) {
         blocks.push([]);
         for (var j = 0; j < cols; j++) {
             let blockx = makeBlock(gridOffsetX + j * (blockWidth + blockMargin), 
                                    gridOffsetY + (rows-1) * (blockWidth + blockMargin)
-                                   - i * (blockWidth + blockMargin));
+                                   - i * (blockWidth + blockMargin), 
+                                   color);
 
             // add to blocks array for future reference
             blocks[i].push(blockx); 
@@ -418,18 +429,25 @@ function initBlocks (blocks) {
 function drawGrid (grid, blocks) {
 
     // border/background
-    let border = makeRectangle(gridOffsetX - blockMargin, 
+    let border1 = makeRectangle(gridOffsetX - blockMargin, 
                                gridOffsetY - blockMargin, 
                                (blockWidth + blockMargin) * cols + blockMargin, 
                                (blockWidth + blockMargin) * rows + blockMargin, 
                                darkgray);
-    stage.addChild(border);
+    let border2 = makeRectangle(gridOffsetX - blockMargin, 
+                               gridOffsetY - blockMargin, 
+                               (blockWidth + blockMargin) * (cols - WALL) + blockMargin, 
+                               (blockWidth + blockMargin) * (rows - FLOOR) + blockMargin, 
+                               blue);
+    stage.addChild(border1);
+    stage.addChild(border2);
 
     // add all possible blocks
     for (var i = 0; i < rows; i++) {
         for (var j = 0; j < cols; j++) {
 
             // add to stage for render
+            stage.addChild(blocksBackground[i][j]);
             stage.addChild(blocks[i][j]);
             // console.log("block added to stage", i, j);
 
@@ -569,9 +587,11 @@ let block_o = [
               ];
 
 
+let patterns = [block_i, block_t, block_l, block_j, block_s, block_z, block_o];
+
 var activeBlock = {};
 
-activeBlock.x = 3;
+activeBlock.x = 4;
 activeBlock.y = 20;
 activeBlock.pattern = block_s;
 activeBlock.rot = 1;
@@ -582,23 +602,52 @@ activeBlock.rotate = function() {
     activeBlock.rot += 1;
     activeBlock.rot = activeBlock.rot % activeBlock.pattern.length; 
 
-    console.log("ROTATE: ", activeBlock.rot);
+    //console.log("ROTATE: ", activeBlock.rot);
 };
 
 activeBlock.moveLeft = function() {
     activeBlock.x -= 1;
     activeBlock.x = Math.max(activeBlock.x, 0); 
-    console.log("BLOCK LEFT");
+    //console.log("BLOCK LEFT");
 };
 
 
-activeBlock.moveRight = function() {
+activeBlock.moveRight = function(g) {
+
     activeBlock.x += 1;
-    activeBlock.x = Math.min(activeBlock.x, cols - activeBlock.width); 
-    console.log("BLOCK RIGHT");
+    //activeBlock.x = Math.min(activeBlock.x, cols - activeBlock.width); 
+
+    let proposedGrid = addGrids(activeBlock, g);
+
+    if (hasOverlap(proposedGrid)) {
+        activeBlock.x -= 1;
+        //console.log("BLOCK RIGHT NOT A GREAT IDEA");
+    }
+
+
+    //console.log("BLOCK RIGHT");
+};
+
+activeBlock.start = function() {
+    activeBlock.y = frozenGrid.length - 1;
+    activeBlock.x = Math.floor(Math.random() * 4) + 3;
 };
 
 
+function plant (block, g) {
+    let newGrid = flatten(block, g);
+    return newGrid;
+};
+
+activeBlock.start();
+
+activeBlock.getNewBlock = function() {
+    let selection = Math.floor(Math.random() * patterns.length);
+    activeBlock.pattern = patterns[selection];
+    activeBlock.rot = Math.floor(Math.random() * activeBlock.pattern.length);
+
+    //console.log("NEW BLOCK:", selection, activeBlock.rot);
+}
 
 // go through the game grid and update the block graphics
 function updateGrid (grid, blocks) {
@@ -618,23 +667,43 @@ function updateGrid (grid, blocks) {
     return true;
 }
 
-function dropOne () {
-
-    score += 1;
-
-    toggleVisible(block2);
-
-    // heartbeat
-    // grid[0][0] = !grid[0][0]; 
-
-
+// move block b down by one row, returns true if it's now hitting something 
+function dropOne (b) {
+    
     activeBlock.y -= 1;
-    activeBlock.y = Math.max(activeBlock.y, activeBlock.height - 1);
+    let proposedGrid = addGrids(b, frozenGrid);
+
+    if (hasOverlap(proposedGrid) || contact(proposedGrid, b)) {
+        //console.log("DROP ONE: NOT GONNA, HAS OVERLAP");
+
+        activeBlock.y += 1;
+        frozenGrid = plant(activeBlock, frozenGrid);
+        activeBlock.start();
+        activeBlock.getNewBlock();
+
+    } else {
+        ; 
+        //activeBlock.y = Math.max(activeBlock.y, activeBlock.height - 1);
+            
+    }
 
     return;
 }
 
+// given grid and block, return true if the block can fall no farther 
+function contact(grid, b) {
+    let hits = false;
+
+    //if (b.y - b.height <= 0) {
+    if (b.y <= 0) {
+        hits = true
+    }    
+
+    return hits;
+}
+
 // given a block and a grid, return a new grid with block written in
+// LOGICAL OR THE CONTENTS OF EACH CELL
 function flatten (b, grid) {
     let flatGrid = [];
 
@@ -646,14 +715,50 @@ function flatten (b, grid) {
     // copy pattern of current active block into the flatGrid
     for (let j = 0; j < b.pattern[b.rot].length; j++) {
         for (let i = 0; i < b.pattern[b.rot][j].length; i++) {
-            flatGrid[b.y - j][b.x + i] = b.pattern[b.rot][j][i];
+            let blockCell = b.pattern[b.rot][j][i];
+            let gridCell = flatGrid[b.y - j][b.x + i];
+            flatGrid[b.y - j][b.x + i] = blockCell || gridCell;  
         } 
     }
 
     return flatGrid;
 }
 
+// given a block and a grid, return a new grid with block written in
+// ADDS THE CONTENTS OF EACH CELL
+function addGrids (b, grid) {
+    let sumGrid = [];
 
+    // copy current grid into flatGrid
+    for (let row of grid) {
+        sumGrid.push(row.slice(0));
+    }
+
+    // copy pattern of current active block into the flatGrid
+    for (let j = 0; j < b.pattern[b.rot].length; j++) {
+        for (let i = 0; i < b.pattern[b.rot][j].length; i++) {
+            let blockCell = b.pattern[b.rot][j][i];
+            let gridCell = sumGrid[b.y - j][b.x + i];
+            sumGrid[b.y - j][b.x + i] = blockCell + gridCell;  
+        } 
+    }
+
+    return sumGrid;
+}
+
+// checks each cell in grid for value greater than 1
+function hasOverlap (grid) {
+    let totalCollisions = 0;
+    let collisions = [];
+
+    for (let row of grid) {
+        collisions = row.filter(x => x > 1);
+        totalCollisions += collisions.length;
+    }
+    
+    console.log("HAS OVERLAP FOUND X COLLISIONS: ", totalCollisions);
+    return totalCollisions > 0;
+}
 
 
 // GOGO GADGET GAMELOOP!!!
@@ -732,7 +837,17 @@ function update (ts) {
     if (ts > gameTick + gameTime) {
         gameTime = Math.floor(ts); 
 
-        dropOne();
+        if (contact(frozenGrid, activeBlock)) {
+            frozenGrid = plant(activeBlock, frozenGrid);
+            activeBlock.start();
+            activeBlock.getNewBlock();
+        } else {
+            dropOne(activeBlock);
+        }
+
+
+
+
     } 
 
     if (mouseControl) {
@@ -748,11 +863,15 @@ function update (ts) {
         nextLevel(1);       // advance 1 level
     }
 
+    
+    // DO THIS STUFF ALL THE TIME AS FAST AS POSSIBLE
+
     // transform the gamespace with the changes to the current active block
     let drawingGrid = flatten(activeBlock, frozenGrid);
 
     // match the graphical grid by asking the game grid what it should look like
     updateGrid(drawingGrid, blocks);
+
 }
 
 function won () {
