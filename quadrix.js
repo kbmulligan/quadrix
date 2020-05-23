@@ -72,6 +72,7 @@ var state = pause,
 let gameTime = 0;
 let gameTick = 500;     
 
+
 // Board vars
 let rows = 30;
 let cols = 15;
@@ -84,6 +85,9 @@ let gridOffsetY = 50;
 // Config vars
 var debugMode = false,
     mouseControl = true;
+let showBorder = true;
+let debugShowAllGrid = false;
+
 
 // Texts
 var livesLabel = "lives: ";
@@ -188,7 +192,6 @@ var keyEnter = keyboard(enter);
 var keyEsc = keyboard(esc);
 
 keyRight.press = function() {
-    
     activeBlock.moveRight(frozenGrid);
 };
 keyRight.release = function() {
@@ -405,6 +408,9 @@ function initGrid (grid) {
             grid[i].push(EMPTY); 
             if (i < FLOOR || j > cols - WALL - 1) {
                 grid[i][j] = FULL; 
+                if (i < FLOOR && j > cols - WALL - 1) {
+                    grid[i][j] = EMPTY;
+                }
             }
         }
     }
@@ -429,18 +435,23 @@ function initBlocks (blocks, color) {
 function drawGrid (grid, blocks) {
 
     // border/background
+    /*
     let border1 = makeRectangle(gridOffsetX - blockMargin, 
                                gridOffsetY - blockMargin, 
                                (blockWidth + blockMargin) * cols + blockMargin, 
                                (blockWidth + blockMargin) * rows + blockMargin, 
                                darkgray);
+    */
     let border2 = makeRectangle(gridOffsetX - blockMargin, 
                                gridOffsetY - blockMargin, 
                                (blockWidth + blockMargin) * (cols - WALL) + blockMargin, 
                                (blockWidth + blockMargin) * (rows - FLOOR) + blockMargin, 
                                blue);
-    stage.addChild(border1);
-    stage.addChild(border2);
+    //stage.addChild(border1);
+
+    if (showBorder) {
+        stage.addChild(border2);
+    }
 
     // add all possible blocks
     for (var i = 0; i < rows; i++) {
@@ -452,7 +463,8 @@ function drawGrid (grid, blocks) {
             // console.log("block added to stage", i, j);
 
             // only turn it on if the grid says so
-            if (grid[i][j]) {
+            let inPlayableArea = i >= FLOOR && j < cols - WALL;
+            if (grid[i][j] && (inPlayableArea || debugShowAllGrid)) {
                 blocks[i][j].visible = true;
             } else {
                 blocks[i][j].visible = false;
@@ -591,12 +603,7 @@ let patterns = [block_i, block_t, block_l, block_j, block_s, block_z, block_o];
 
 var activeBlock = {};
 
-activeBlock.x = 4;
-activeBlock.y = 20;
-activeBlock.pattern = block_s;
-activeBlock.rot = 1;
-activeBlock.height = activeBlock.pattern[activeBlock.rot].length;
-activeBlock.width = activeBlock.pattern[activeBlock.rot][0].length;
+
 
 activeBlock.rotate = function(g) {
     activeBlock.rot += 1;
@@ -626,7 +633,6 @@ activeBlock.moveLeft = function() {
 activeBlock.moveRight = function(g) {
 
     activeBlock.x += 1;
-    //activeBlock.x = Math.min(activeBlock.x, cols - activeBlock.width); 
 
     let proposedGrid = addGrids(activeBlock, g);
     if (hasOverlap(proposedGrid)) {
@@ -649,7 +655,6 @@ function plant (block, g) {
     return newGrid;
 };
 
-activeBlock.start();
 
 activeBlock.getNewBlock = function() {
     let selection = Math.floor(Math.random() * patterns.length);
@@ -666,7 +671,8 @@ function updateGrid (grid, blocks) {
     for (var i = 0; i < rows; i++) {
         for (var j = 0; j < cols; j++) {
             // only turn it on if the grid says so
-            if (grid[i][j]) {
+            let inPlayableArea = i >= FLOOR && j < cols - WALL;
+            if (grid[i][j] && (inPlayableArea || debugShowAllGrid)) {
                 blocks[i][j].visible = true;
             } else {
                 blocks[i][j].visible = false;
@@ -770,58 +776,68 @@ function hasOverlap (grid) {
     return totalCollisions > 0;
 }
 
+// given grid, returns a list of indices of rows in the grid that are full
+function getFullRows (grid) {
+    let rowList = [];
+
+    for (let i = 0; i < grid.length; i++) {
+        if (sumRow(grid[i]) >= cols) {
+            console.log("SUM: ", i, sumRow(grid[i]));
+            rowList.push(i);
+        } 
+    }
+
+    return rowList;
+}
+
+
+// given a grid and a list of row indices:
+//     -- remove the rows from the grid, shifting down 
+//     -- return number of rows removed
+function removeRows (grid, rows) {
+
+    // check each row index
+    for (let i of rows) {
+        console.log("REMOVING ROW: ", i);
+
+        // remove the row at index i 
+        grid.splice(i,1);
+
+        // create new empty row 
+        let newRow = newEmptyRow();
+
+        // insert new row into grid
+        grid.splice(grid.length - 1, 0, newRow);
+       
+        console.log("NEW GRID: ", grid);
+    } 
+
+    return rows.length;
+}
+
+function newEmptyRow () {
+    let newRow = [];
+    for (var j = 0; j < cols; j++) {
+        let value = EMPTY; 
+        if (j > cols - WALL - 1) {
+            value = FULL;
+        }
+
+        newRow.push(value); 
+    }
+    return newRow;
+}
+
+
+
+// initialize activeBlock
+activeBlock.start();
+activeBlock.getNewBlock();
 
 // GOGO GADGET GAMELOOP!!!
 console.log("Game loop starting...");
 gameLoop();
 
-
-// COLLISION LOGIC //////////////////////////////////////////////////
-
-function detectCollisions () {
-    ;
-}
-
-function boundObject (object) {
-    if (object.x < 0) {
-        object.x = 0;
-        object.vx = 0;
-    }
-    if (object.y < 0) {
-        object.y = 0;
-        object.vy = 0;
-    }
-    if (object.x > window.innerWidth - object.width) {
-        object.x = window.innerWidth - object.width;
-        object.vx = 0;
-    }
-    if (object.y > window.innerHeight - object.height) {
-        object.y = window.innerHeight - object.height;
-        object.vy = 0;
-    }
-}
-
-function bounceObject (object) {
-    if (object.x < object.radius) {
-        object.x = object.radius;
-        object.vx = -object.vx;
-    }
-    
-    if (object.x > window.innerWidth - object.radius) {
-        object.x = window.innerWidth - object.radius;
-        object.vx = -object.vx;
-    }
-
-    if (object.y < object.radius) {
-        object.y = object.radius;
-        object.vy = -object.vy;
-    }
-    if (object.y > window.innerHeight - object.radius) {
-        object.y = window.innerHeight - object.radius;
-        
-        kill();
-    }
-}
 
 function distance (ax, ay, bx, by) {
     return Math.sqrt(Math.pow((ax-bx),2) + (Math.pow((ay-by),2)));
@@ -855,16 +871,16 @@ function update (ts) {
             dropOne(activeBlock);
         }
 
-
-
-
     } 
 
-    if (mouseControl) {
-        ;
+    // check for completed rows and increase score based on any
+    let fullRows = getFullRows(frozenGrid);
+    if (fullRows.length > 0) {
+        console.log("FULL ROWS: ", fullRows);
+        score += removeRows(frozenGrid, fullRows);
     }
 
-    if (dead()) {
+    if (dead(frozenGrid)) {
         txtGameOver.visible = true;
         pauseGame();
     }
@@ -882,6 +898,17 @@ function update (ts) {
     // match the graphical grid by asking the game grid what it should look like
     updateGrid(drawingGrid, blocks);
 
+}
+
+function dead(g) {
+    
+    let sumTop = g[cols-1]; 
+
+    return  sumRow(sumTop) >= cols;
+}
+
+function sumRow(row) {
+    return row.reduce((sum, x) => (sum + x), 0);
 }
 
 function won () {
@@ -906,9 +933,6 @@ function play (timestamp) {
     // pointer.visible = false;
 
     update(timestamp);
-
-    detectCollisions();
-    
     animate();
 }
 
@@ -921,9 +945,6 @@ function kill () {
     lives -= 1;
 }
 
-function dead () {
-    return lives == 0;
-}
 
 function animate() {
     ;
