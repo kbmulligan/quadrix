@@ -67,10 +67,13 @@ var state = pause,
     level = 1,
     score = 0,
     lives = 3,
+    lines = 0,
     startingLives = 3;
 
 let gameTime = 0;
 let gameTick = 500;     
+let acceleration = 0.95;     // how quickly the game speeds up when a line is cleared
+                             // lower is faster 
 
 
 // Board vars
@@ -80,19 +83,23 @@ let cols = 15;
 let gridOffsetX = innerWidth * 0.5 - ((blockWidth + blockMargin) * (cols - WALL)/2);
 let gridOffsetY = 50;
 
+let uiOffsetX = innerWidth * 0.05;
+let uiOffsetY = 50;
+
 // AI/Cheat
 
 // Config vars
-var debugMode = false,
+var debugMode = true,
     mouseControl = true;
 let showBorder = true;
 let debugShowAllGrid = false;
 
 
 // Texts
-var livesLabel = "lives: ";
-var scoreLabel = "score: ";
-var levelLabel = "level: ";
+var livesLabel = "LIVES: ";
+var linesLabel = "LINES: ";
+var scoreLabel = "SCORE: ";
+var levelLabel = "LEVEL: ";
 
 
 //Create the renderer
@@ -303,34 +310,41 @@ function nextLevel (jump) {
 }
 
 // GAME TEXTS ///////////////////////////////////////////////////////
+var defaultFont = {font: "Courier", fontSize: 32, fill: textColor, align: "center"};
 var txtLives = new Text(
   livesLabel + lives,
-  {font: "bold 32px courier", fill: textColor}
+  defaultFont 
+);
+txtLives.visible = false;
+
+var txtLines = new Text(
+  linesLabel + lines,
+  defaultFont
 );
 
 var txtScore = new Text(
   scoreLabel + score,
-  {font: "bold 32px courier", fill: textColor}
+  defaultFont
 );
 
 var txtLevel = new Text(
   levelLabel + level,
-  {font: "bold 32px courier", fill: textColor}
+  defaultFont 
 );
 
 var txtPaused = new Text(
   "PAUSED",
-  {font: "bold 64px courier", fill: textColor}
+  defaultFont
 );
 
 var txtGameOver = new Text(
   "GAME OVER",
-  {font: "bold 72px courier", fill: textColor}
+  defaultFont
 );
 
 var txtCredits = new Text(
   "nitor",
-  {font: "bold 64px courier", fill: textColor}
+  defaultFont
 );
 
 
@@ -338,9 +352,10 @@ txtGameOver.visible = false;
 txtPaused.visible = true;
 txtCredits.visible = false;
 
-txtScore.position.set(window.innerWidth - (txtScore.width * 1.4), txtScore.height * 0.1);
-txtLives.position.set(window.innerWidth*0.02, txtLives.height * 0.1);
-txtLevel.position.set(window.innerWidth*0.5 - txtLevel.width/2, txtLevel.height * 0.1);
+txtScore.position.set(uiOffsetX, uiOffsetY + txtScore.height * 0.1);
+txtLines.position.set(uiOffsetX, uiOffsetY + txtScore.height * 1.1);
+txtLevel.position.set(uiOffsetX, uiOffsetY + txtScore.height * 2.1);
+txtLives.position.set(uiOffsetX, uiOffsetY + txtScore.height * 4.1);
 txtPaused.position.set(window.innerWidth*0.2 - txtPaused.width/2, window.innerHeight*0.45);
 txtGameOver.position.set(window.innerWidth/2 - txtGameOver.width/2, window.innerHeight*0.6);
 
@@ -352,6 +367,7 @@ txtGameOver.alpha = 1.0;
 
 stage.addChild(txtScore);
 stage.addChild(txtLives);
+stage.addChild(txtLines);
 stage.addChild(txtLevel);
 stage.addChild(txtPaused);
 stage.addChild(txtGameOver);
@@ -441,16 +457,24 @@ function drawGrid (grid, blocks) {
                                (blockWidth + blockMargin) * cols + blockMargin, 
                                (blockWidth + blockMargin) * rows + blockMargin, 
                                darkgray);
+    stage.addChild(border1);
     */
-    let border2 = makeRectangle(gridOffsetX - blockMargin, 
+
+    let borderOuter = makeRectangle(gridOffsetX - blockMargin, 
                                gridOffsetY - blockMargin, 
                                (blockWidth + blockMargin) * (cols - WALL) + blockMargin, 
                                (blockWidth + blockMargin) * (rows - FLOOR) + blockMargin, 
                                blue);
-    //stage.addChild(border1);
+    let borderInner = makeRectangle(gridOffsetX, 
+                               gridOffsetY, 
+                               (blockWidth + blockMargin) * (cols - WALL) - blockMargin, 
+                               (blockWidth + blockMargin) * (rows - FLOOR) - blockMargin, 
+                               black);
+
 
     if (showBorder) {
-        stage.addChild(border2);
+        stage.addChild(borderOuter);
+        stage.addChild(borderInner);
     }
 
     // add all possible blocks
@@ -458,7 +482,7 @@ function drawGrid (grid, blocks) {
         for (var j = 0; j < cols; j++) {
 
             // add to stage for render
-            stage.addChild(blocksBackground[i][j]);
+            //stage.addChild(blocksBackground[i][j]);
             stage.addChild(blocks[i][j]);
             // console.log("block added to stage", i, j);
 
@@ -484,7 +508,7 @@ function randomizeGrid (grid) {
     }
 }
 
-
+/*
 let bx = 50;
 let by = 50;
 let block1 = makeBlock(bx,by);
@@ -495,6 +519,7 @@ stage.addChild(block1);
 stage.addChild(block2);
 stage.addChild(block3);
 stage.addChild(block4);
+*/
 
 // BLOCK TYPES //////////////////////////////////////////////////////
 let block_i = [
@@ -658,6 +683,12 @@ function plant (block, g) {
 
 activeBlock.getNewBlock = function() {
     let selection = Math.floor(Math.random() * patterns.length);
+
+    if (debugMode)  {
+        let narrowChoice = [0,1,6];
+        selection = narrowChoice[Math.floor(Math.random() * narrowChoice.length)]
+    }
+
     activeBlock.pattern = patterns[selection];
     activeBlock.rot = Math.floor(Math.random() * activeBlock.pattern.length);
 
@@ -772,7 +803,7 @@ function hasOverlap (grid) {
         totalCollisions += collisions.length;
     }
     
-    console.log("HAS OVERLAP FOUND X COLLISIONS: ", totalCollisions);
+    //console.log("HAS OVERLAP FOUND X COLLISIONS: ", totalCollisions);
     return totalCollisions > 0;
 }
 
@@ -791,28 +822,24 @@ function getFullRows (grid) {
 }
 
 
-// given a grid and a list of row indices:
-//     -- remove the rows from the grid, shifting down 
-//     -- return number of rows removed
-function removeRows (grid, rows) {
+// given a grid and a row index:
+//     -- remove the row from the grid, shifting down 
+function removeRow (grid, i) {
 
-    // check each row index
-    for (let i of rows) {
-        console.log("REMOVING ROW: ", i);
+    console.log("REMOVING ROW: ", i);
 
-        // remove the row at index i 
-        grid.splice(i,1);
+    // remove the row at index i 
+    grid.splice(i,1);
 
-        // create new empty row 
-        let newRow = newEmptyRow();
+    // create new empty row 
+    let newRow = newEmptyRow();
 
-        // insert new row into grid
-        grid.splice(grid.length - 1, 0, newRow);
+    // insert new row into grid at the top
+    grid.splice(grid.length - 1, 0, newRow);
        
-        console.log("NEW GRID: ", grid);
-    } 
+    console.log("NEW GRID: ", grid);
 
-    return rows.length;
+    return;
 }
 
 function newEmptyRow () {
@@ -856,6 +883,7 @@ function update (ts) {
 
 
     txtLives.text = livesLabel + lives;
+    txtLines.text = linesLabel + lines;
     txtScore.text = scoreLabel + score;
     txtLevel.text = levelLabel + level;
 
@@ -875,10 +903,31 @@ function update (ts) {
 
     // check for completed rows and increase score based on any
     let fullRows = getFullRows(frozenGrid);
-    if (fullRows.length > 0) {
+
+    let removed = 0;
+    while (fullRows.length > 0) {
+
         console.log("FULL ROWS: ", fullRows);
-        score += removeRows(frozenGrid, fullRows);
+
+        // remove one full row
+        removeRow(frozenGrid, fullRows[0]);
+
+        // check for any more
+        fullRows = getFullRows(frozenGrid);
+
+        removed += 1;
     }
+
+    if (removed > 0) {
+        score += removed*removed * 10; 
+        lines += removed;
+
+        // increase speed
+        gameTick *= acceleration;
+    }
+
+
+
 
     if (dead(frozenGrid)) {
         txtGameOver.visible = true;
