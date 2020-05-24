@@ -31,6 +31,14 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
     DEALINGS IN THE SOFTWARE.
  */
+/**
+
+    TODO: 
+        - Next piece display
+        - Ghost piece
+        - Hard drop
+
+*/
 
 //Test that Pixi is working
 console.log(PIXI);
@@ -40,6 +48,10 @@ var Text = PIXI.Text;
 //colors
 var blue = 0x66CCFF;
 var red = 0xFF0000;
+var green = 0x00FF00;
+var yellow = 0xFFFF00;
+var orange = 0xFFA500;
+var purple = 0xFF00FF;
 var greenNeon1 = 0x39FF14;
 var greenNeon2 = 0x1cb200;
 var white = 0xffffff;
@@ -51,10 +63,13 @@ var blockColor = greenNeon1;
 var textColor = white;
 
 
+let blockColors = [1, 2, 3, 4, 5, 6, 7];
+
 // Primitive vars
 var blockLength = 20,
     blockWidth = 22,
     blockMargin = 2;
+let borderMargin = 5;
 
 const EMPTY = 0;
 const FULL = 1;
@@ -75,9 +90,13 @@ let gameTick = 500;
 let acceleration = 0.95;     // how quickly the game speeds up when a line is cleared
                              // lower is faster 
 
+let lastAdvance = 0;     
+let dropTime = 200;     
+
+let levelUpScore = 1000;     // score to reach before next level
 
 // Board vars
-let rows = 30;
+let rows = 25;
 let cols = 15;
 
 let gridOffsetX = innerWidth * 0.5 - ((blockWidth + blockMargin) * (cols - WALL)/2);
@@ -89,7 +108,7 @@ let uiOffsetY = 50;
 // AI/Cheat
 
 // Config vars
-var debugMode = true,
+var debugMode = false,
     mouseControl = true;
 let showBorder = true;
 let debugShowAllGrid = false;
@@ -199,21 +218,27 @@ var keyEnter = keyboard(enter);
 var keyEsc = keyboard(esc);
 
 keyRight.press = function() {
-    activeBlock.moveRight(frozenGrid);
+    if (state == play) {
+        activeBlock.moveRight(frozenGrid);
+    }
 };
 keyRight.release = function() {
     ;
 };
 
 keyLeft.press = function() {
-    activeBlock.moveLeft();
+    if (state == play) {
+        activeBlock.moveLeft(frozenGrid);
+    }
 };
 keyLeft.release = function() {
     ;
 };
 
 keyUp.press = function() {
-    activeBlock.rotate(frozenGrid);
+    if (state == play) {
+        activeBlock.rotate(frozenGrid);
+    }
 };
 keyUp.release = function() {
     ;
@@ -299,7 +324,8 @@ function resetGame () {
     
 function resetLevel (level) {
     txtGameOver.visible = false;
-    ball.visible = true;
+    activeBlock.start();
+    activeBlock.getNewBlock();
     draw();
 }
 
@@ -310,7 +336,11 @@ function nextLevel (jump) {
 }
 
 // GAME TEXTS ///////////////////////////////////////////////////////
-var defaultFont = {font: "Courier", fontSize: 32, fill: textColor, align: "center"};
+var defaultFont = {fontFamily: "Courier", 
+                   fontSize: 32, 
+                   fontWeight: "bold",
+                   fill: textColor, 
+                   align: "center"};
 var txtLives = new Text(
   livesLabel + lives,
   defaultFont 
@@ -356,8 +386,8 @@ txtScore.position.set(uiOffsetX, uiOffsetY + txtScore.height * 0.1);
 txtLines.position.set(uiOffsetX, uiOffsetY + txtScore.height * 1.1);
 txtLevel.position.set(uiOffsetX, uiOffsetY + txtScore.height * 2.1);
 txtLives.position.set(uiOffsetX, uiOffsetY + txtScore.height * 4.1);
-txtPaused.position.set(window.innerWidth*0.2 - txtPaused.width/2, window.innerHeight*0.45);
-txtGameOver.position.set(window.innerWidth/2 - txtGameOver.width/2, window.innerHeight*0.6);
+txtPaused.position.set(window.innerWidth/2 - txtPaused.width/2, window.innerHeight*0.85);
+txtGameOver.position.set(window.innerWidth/2 - txtGameOver.width/2, window.innerHeight*0.5);
 
 txtScore.alpha = 0.9;
 txtLives.alpha = 0.9;
@@ -365,13 +395,6 @@ txtLevel.alpha = 0.9;
 txtPaused.alpha = 1.0;
 txtGameOver.alpha = 1.0;
 
-stage.addChild(txtScore);
-stage.addChild(txtLives);
-stage.addChild(txtLines);
-stage.addChild(txtLevel);
-stage.addChild(txtPaused);
-stage.addChild(txtGameOver);
-stage.addChild(txtCredits);
 
 function makeRectangle (initx, inity, length, width, color) {
     var rectangle = new PIXI.Graphics();
@@ -440,7 +463,7 @@ function initBlocks (blocks, color) {
             let blockx = makeBlock(gridOffsetX + j * (blockWidth + blockMargin), 
                                    gridOffsetY + (rows-1) * (blockWidth + blockMargin)
                                    - i * (blockWidth + blockMargin), 
-                                   color);
+                                   green);
 
             // add to blocks array for future reference
             blocks[i].push(blockx); 
@@ -460,16 +483,18 @@ function drawGrid (grid, blocks) {
     stage.addChild(border1);
     */
 
-    let borderOuter = makeRectangle(gridOffsetX - blockMargin, 
-                               gridOffsetY - blockMargin, 
-                               (blockWidth + blockMargin) * (cols - WALL) + blockMargin, 
-                               (blockWidth + blockMargin) * (rows - FLOOR) + blockMargin, 
-                               blue);
-    let borderInner = makeRectangle(gridOffsetX, 
-                               gridOffsetY, 
-                               (blockWidth + blockMargin) * (cols - WALL) - blockMargin, 
-                               (blockWidth + blockMargin) * (rows - FLOOR) - blockMargin, 
-                               black);
+    let borderOuter = makeRectangle(
+                          gridOffsetX - borderMargin, 
+                          gridOffsetY - borderMargin, 
+                          (blockWidth + blockMargin) * (cols - WALL) + borderMargin * 2, 
+                          (blockWidth + blockMargin) * (rows - FLOOR) + borderMargin * 2, 
+                          blue);
+    let borderInner = makeRectangle(
+                          gridOffsetX, 
+                          gridOffsetY, 
+                          (blockWidth + blockMargin) * (cols - WALL) - blockMargin, 
+                          (blockWidth + blockMargin) * (rows - FLOOR) - blockMargin, 
+                          black);
 
 
     if (showBorder) {
@@ -507,19 +532,6 @@ function randomizeGrid (grid) {
         }
     }
 }
-
-/*
-let bx = 50;
-let by = 50;
-let block1 = makeBlock(bx,by);
-let block2 = makeBlock(bx + (blockWidth + blockMargin), by);
-let block3 = makeBlock(bx + (blockWidth + blockMargin) * 2, by);
-let block4 = makeBlock(bx, by + (blockWidth + blockMargin));
-stage.addChild(block1);
-stage.addChild(block2);
-stage.addChild(block3);
-stage.addChild(block4);
-*/
 
 // BLOCK TYPES //////////////////////////////////////////////////////
 let block_i = [
@@ -627,16 +639,20 @@ let block_o = [
 let patterns = [block_i, block_t, block_l, block_j, block_s, block_z, block_o];
 
 var activeBlock = {};
+var ghostBlock = {};
 
 
-
+// rotates current block to the next sequence
 activeBlock.rotate = function(g) {
+
+    // advance rotation and wrap if too far
     activeBlock.rot += 1;
     if (activeBlock.rot >= activeBlock.pattern.length) {
         activeBlock.rot = 0;
     }
 
-    let proposedGrid = addGrids(activeBlock, g);
+    // reverse if would be invalid grid state
+    let proposedGrid = addGrids(activeBlock, normalizeGrid(g));
     if (hasOverlap(proposedGrid)) {
         activeBlock.rot -= 1;
         if (activeBlock.rot < 0) {
@@ -648,23 +664,36 @@ activeBlock.rotate = function(g) {
     //console.log("ROTATE: ", activeBlock.rot);
 };
 
-activeBlock.moveLeft = function() {
+activeBlock.moveLeft = function(g) {
+
+    // move
     activeBlock.x -= 1;
+
+    // limit
     activeBlock.x = Math.max(activeBlock.x, 0); 
+
+    // limit
+    let proposedGrid = addGrids(activeBlock, normalizeGrid(g));
+    if (hasOverlap(proposedGrid)) {
+        activeBlock.x += 1;
+        //console.log("BLOCK LEFT NOT A GREAT IDEA, OVERLAPS");
+    }
+
     //console.log("BLOCK LEFT");
 };
 
 
 activeBlock.moveRight = function(g) {
 
+    // move
     activeBlock.x += 1;
 
-    let proposedGrid = addGrids(activeBlock, g);
+    // limit
+    let proposedGrid = addGrids(activeBlock, normalizeGrid(g));
     if (hasOverlap(proposedGrid)) {
         activeBlock.x -= 1;
-        //console.log("BLOCK RIGHT NOT A GREAT IDEA");
+        //console.log("BLOCK RIGHT NOT A GREAT IDEA, OVERLAPS");
     }
-
 
     //console.log("BLOCK RIGHT");
 };
@@ -692,6 +721,9 @@ activeBlock.getNewBlock = function() {
     activeBlock.pattern = patterns[selection];
     activeBlock.rot = Math.floor(Math.random() * activeBlock.pattern.length);
 
+    // add color
+    activeBlock.colorNum = Math.floor(Math.random() * blockColors.length) + 1;
+
     //console.log("NEW BLOCK:", selection, activeBlock.rot);
 }
 
@@ -705,6 +737,14 @@ function updateGrid (grid, blocks) {
             let inPlayableArea = i >= FLOOR && j < cols - WALL;
             if (grid[i][j] && (inPlayableArea || debugShowAllGrid)) {
                 blocks[i][j].visible = true;
+                stage.removeChild(blocks[i][j]);
+
+                let blockColor = getBlockColor(grid[i][j]);
+                blocks[i][j] = makeBlock(gridOffsetX + j * (blockWidth + blockMargin), 
+                                   gridOffsetY + (rows-1) * (blockWidth + blockMargin)
+                                   - i * (blockWidth + blockMargin), 
+                                   blockColor);
+                stage.addChild(blocks[i][j]);
             } else {
                 blocks[i][j].visible = false;
             }
@@ -714,39 +754,53 @@ function updateGrid (grid, blocks) {
     return true;
 }
 
+function getBlockColor (num) {
+    let color = white;
+
+    if (num == 1) {
+        color = green;
+    } 
+    if (num == 2) {
+        color = red;
+    } 
+    if (num == 3) {
+        color = yellow;
+    } 
+    if (num == 4) {
+        color = blue;
+    } 
+    if (num == 5) {
+        color = orange;
+    } 
+    if (num == 6) {
+        color = purple;
+    } 
+    if (num == 7) {
+        color = white;
+    } 
+
+    return color;
+}
+
 // move block b down by one row, returns true if it's now hitting something 
 function dropOne (b) {
     
-    activeBlock.y -= 1;
-    let proposedGrid = addGrids(b, frozenGrid);
+    b.y -= 1;
+    let proposedGrid = addGrids(b, normalizeGrid(frozenGrid));
 
-    if (hasOverlap(proposedGrid) || contact(proposedGrid, b)) {
+    if (hasOverlap(proposedGrid)) {
         //console.log("DROP ONE: NOT GONNA, HAS OVERLAP");
 
-        activeBlock.y += 1;
-        frozenGrid = plant(activeBlock, frozenGrid);
-        activeBlock.start();
-        activeBlock.getNewBlock();
+        b.y += 1;
+        frozenGrid = plant(b, frozenGrid);
+        b.start();
+        b.getNewBlock();
 
     } else {
         ; 
-        //activeBlock.y = Math.max(activeBlock.y, activeBlock.height - 1);
-            
     }
 
     return;
-}
-
-// given grid and block, return true if the block can fall no farther 
-function contact(grid, b) {
-    let hits = false;
-
-    //if (b.y - b.height <= 0) {
-    if (b.y <= 0) {
-        hits = true
-    }    
-
-    return hits;
 }
 
 // given a block and a grid, return a new grid with block written in
@@ -764,7 +818,11 @@ function flatten (b, grid) {
         for (let i = 0; i < b.pattern[b.rot][j].length; i++) {
             let blockCell = b.pattern[b.rot][j][i];
             let gridCell = flatGrid[b.y - j][b.x + i];
-            flatGrid[b.y - j][b.x + i] = blockCell || gridCell;  
+            if (blockCell > 0) {
+                flatGrid[b.y - j][b.x + i] = blockCell * b.colorNum;
+            } else {
+                flatGrid[b.y - j][b.x + i] = gridCell;
+            }
         } 
     }
 
@@ -856,10 +914,24 @@ function newEmptyRow () {
 }
 
 
+// add UI elements before start
+stage.addChild(txtScore);
+stage.addChild(txtLives);
+stage.addChild(txtLines);
+stage.addChild(txtLevel);
+stage.addChild(txtPaused);
+stage.addChild(txtGameOver);
+stage.addChild(txtCredits);
 
 // initialize activeBlock
 activeBlock.start();
 activeBlock.getNewBlock();
+
+/*
+let test = [0,1,2,3,4,105];
+console.log(test);
+console.log(normalizeRow(test));
+*/
 
 // GOGO GADGET GAMELOOP!!!
 console.log("Game loop starting...");
@@ -881,7 +953,7 @@ function gameLoop (timestamp) {
 
 function update (ts) {
 
-
+    // update UI text elements
     txtLives.text = livesLabel + lives;
     txtLines.text = linesLabel + lines;
     txtScore.text = scoreLabel + score;
@@ -890,19 +962,11 @@ function update (ts) {
     // do a game tick if it's time
     if (ts > gameTick + gameTime) {
         gameTime = Math.floor(ts); 
-
-        if (contact(frozenGrid, activeBlock)) {
-            frozenGrid = plant(activeBlock, frozenGrid);
-            activeBlock.start();
-            activeBlock.getNewBlock();
-        } else {
-            dropOne(activeBlock);
-        }
-
+        dropOne(activeBlock);
     } 
 
     // check for completed rows and increase score based on any
-    let fullRows = getFullRows(frozenGrid);
+    let fullRows = getFullRows(normalizeGrid(frozenGrid));
 
     let removed = 0;
     while (fullRows.length > 0) {
@@ -913,7 +977,7 @@ function update (ts) {
         removeRow(frozenGrid, fullRows[0]);
 
         // check for any more
-        fullRows = getFullRows(frozenGrid);
+        fullRows = getFullRows(normalizeGrid(frozenGrid));
 
         removed += 1;
     }
@@ -927,11 +991,13 @@ function update (ts) {
     }
 
 
+    
 
 
     if (dead(frozenGrid)) {
         txtGameOver.visible = true;
         pauseGame();
+        console.log("Appears this is a dead game state.");
     }
 
     if (won()) {
@@ -941,6 +1007,18 @@ function update (ts) {
     
     // DO THIS STUFF ALL THE TIME AS FAST AS POSSIBLE
 
+    // update location of ghost piece
+    while (false) {
+
+    }
+
+
+    // faster drop for keyDown
+    if (keyDown.isDown && ts > lastAdvance + dropTime ) {
+        lastAdvance = ts;
+        dropOne(activeBlock);
+    }
+
     // transform the gamespace with the changes to the current active block
     let drawingGrid = flatten(activeBlock, frozenGrid);
 
@@ -949,19 +1027,36 @@ function update (ts) {
 
 }
 
-function dead(g) {
-    
-    let sumTop = g[cols-1]; 
+function dead (g) {
+   
+    // select top row from  
+    let topRow = g[g.length - 1]; 
 
-    return  sumRow(sumTop) >= cols;
+    // say dead if any permanent blocks occupy first row
+    // return  sumRow(topRow) >= 0;
+    return false;
 }
 
-function sumRow(row) {
+function normalizeRow (row) {
+    return row.map(x => x > 0 ? 1 : 0 );
+}
+
+function normalizeGrid (g) {
+    let ng = [];
+
+    for (let r of g) {
+        ng.push(normalizeRow(r));
+    }
+
+    return ng;
+}
+
+function sumRow (row) {
     return row.reduce((sum, x) => (sum + x), 0);
 }
 
 function won () {
-    return false;
+    return score > levelUpScore;
 }
 
 function anyVisible (sprites) {
