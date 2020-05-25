@@ -41,7 +41,7 @@
 */
 
 //Test that Pixi is working
-console.log(PIXI);
+//console.log(PIXI);
 
 var Text = PIXI.Text;
 
@@ -62,8 +62,9 @@ var darkgray = 0x555555;
 var blockColor = greenNeon1; 
 var textColor = white;
 
+// these are mapped in the function getBlockColor
+let blockColors = [1, 2, 3, 4, 5, 6, 7];  
 
-let blockColors = [1, 2, 3, 4, 5, 6, 7];
 
 // Primitive vars
 var blockLength = 20,
@@ -259,10 +260,10 @@ keyEsc.release = function () {
 };
 
 keySpace.press = function() {
-    ;
+    hardDrop(activeBlock, frozenGrid); 
 };
 keySpace.release = function() {
-    togglePause();
+    //togglePause();
     //randomizeGrid(frozenGrid);
     ;
 };
@@ -320,6 +321,8 @@ function resetGame () {
     txtGameOver.visible = false;
     lives = startingLives;
     score = 0;
+    lines = 0;
+    level = 1;
 }
     
 function resetLevel (level) {
@@ -428,6 +431,18 @@ function makeBlock (initx, inity, color) {
     return block;
 }
 
+function makeLine (initx, initx, movex, movey, color) {
+    let line = new PIXI.Graphics();
+    line.beginFill(color);
+    line.lineTo(movex, movey);
+    line.endFill();
+    line.x = initx;
+    line.y = inity;
+    line.vx = 0;
+    line.vy = 0;
+
+    return line;
+}
 
 // create grid and all possible blocks in the grid
 let frozenGrid = [];
@@ -745,6 +760,15 @@ function updateGrid (grid, blocks) {
                                    - i * (blockWidth + blockMargin), 
                                    blockColor);
                 stage.addChild(blocks[i][j]);
+
+                // add embellishments
+                /*
+                let botLine = makeLine(gridOffsetX + j * (blockWidth + blockMargin), 
+                                   gridOffsetY + (rows-1) * (blockWidth + blockMargin)
+                                   - i * (blockWidth + blockMargin), 
+                                   white);
+                stage.addChild(botLine);
+                */
             } else {
                 blocks[i][j].visible = false;
             }
@@ -782,8 +806,10 @@ function getBlockColor (num) {
     return color;
 }
 
-// move block b down by one row, returns true if it's now hitting something 
+// move block b down by one row
+// returns true if successful and false if state would be invalid
 function dropOne (b) {
+    let dropped = false;
     
     b.y -= 1;
     let proposedGrid = addGrids(b, normalizeGrid(frozenGrid));
@@ -797,8 +823,21 @@ function dropOne (b) {
         b.getNewBlock();
 
     } else {
-        ; 
+        dropped = true; 
     }
+
+    return dropped;
+}
+
+// given grid g, move block b down all possible rows until 
+// it would be stop and lock it
+function hardDrop (b, g) {
+
+    let didDrop = dropOne(b);
+    while (didDrop) {
+    
+        didDrop = dropOne(b);
+    } 
 
     return;
 }
