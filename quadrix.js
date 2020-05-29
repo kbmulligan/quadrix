@@ -34,8 +34,7 @@
 /**
 
     TODO: 
-        - Next piece display
-        - Ghost piece
+        - Ghost piece shadow
         - Lose if can't spawn
 
 */
@@ -125,6 +124,8 @@ let gridOffsetY = 50;
 
 let uiOffsetX = uiMargin.left * 2;
 let uiOffsetY = uiMargin.top + uiMargin.left;
+let nextBlockOffsetX = 100;
+let nextBlockOffsetY = 300;
 
 let nextPieces = []; 
 
@@ -136,6 +137,8 @@ var debugMode = false,
 let showBorder = true;
 let debugShowAllGrid = false;
 let showGhostPiece = true;
+let showBlockAccents = false;
+let showNextPiece = true;
 
 
 // Texts
@@ -487,11 +490,24 @@ let blocks = [];                                    // 2D array of graphic block
 let blocksBackground = [];                          // 2D array of graphic blocks
 let accents = [];                                   // 2D array of graphic changes
 
+let previewBlocks = [];
+
+
 initGrid(frozenGrid);
 initBlocks(blocks, blockColor);
 initBlocks(blocksBackground, black);
+initPreviewBlocks();
 initAccents(accents);
 drawGrid(frozenGrid, blocks);
+
+function initPreviewBlocks () {
+    for (var i = 0; i < 4; i++) {
+        previewBlocks.push([]);
+        for (var j = 0; j < 4; j++) {
+            previewBlocks[i].push({}); 
+        }
+    }
+}
 
 // initialize grid with blocks 
 function initGrid (grid) {
@@ -517,7 +533,7 @@ function initBlocks (blocks, color) {
             let blockx = makeBlock(gridOffsetX + j * (blockWidth + blockMargin), 
                                    gridOffsetY + (rows-1) * (blockWidth + blockMargin)
                                    - i * (blockWidth + blockMargin), 
-                                   green);
+                                   color);
 
             // add to blocks array for future reference
             blocks[i].push(blockx); 
@@ -612,9 +628,11 @@ function drawGrid (grid, blocks) {
             if (grid[i][j] && (inPlayableArea || debugShowAllGrid)) {
                 blocks[i][j].visible = true;
                 accents[i][j].bottomLine.visible = true;
+                accents[i][j].sideLine.visible = true;
             } else {
                 blocks[i][j].visible = false;
                 accents[i][j].bottomLine.visible = false;
+                accents[i][j].sideLine.visible = false;
             }
         }
     }
@@ -832,43 +850,42 @@ let getNewBlock = function() {
     activeBlock.pattern = patterns[selection];
     activeBlock.rot = Math.floor(Math.random() * activeBlock.pattern.length);
 
-    // add color
-  
-    // random color
-    // activeBlock.colorNum = 
-  
-    // deterministic color based on pattern
-    //activeBlock.colorNum = selection + 1;
-
-    //console.log("NEW BLOCK:", selection, activeBlock.rot);
-
     return getNextBlock();
 }
 
+// make sure nextPieces has numbers in it
 function fillBag () {
-    // make sure nextPieces has numbers in it
     if (nextPieces.length <= 0) {
-        nextPieces = allPatterns.slice();
-        nextPieces = shuffleArray(nextPieces);
+
+        nextPatterns = allPatterns.slice();
+        nextPatterns = shuffleArray(nextPatterns);
+
+        for (let i of nextPatterns) {
+            let piece = {};
+            piece.pattern = patterns[i];
+            piece.rot = Math.floor(Math.random() * piece.pattern.length);
+            piece.x = 0;
+            piece.y = 0;
+            piece.colorNum = Math.floor(Math.random() * blockColors.length) + 1;
+  
+            nextPieces.push(piece);
+        }
     }
 
-    console.log("BAG FILLED: ", nextPieces);
+    //console.log("BAG FILLED: ", nextPieces);
 }
 
+// return block object from next pieces queue
 function getNextBlock () {
 
+    // ensure something to pull from
     fillBag();
 
-    let nextBlock = {};
+    // take block from next pieces queue
+    let nextBlock = nextPieces.pop();
 
-    // take pattern from next pieces queue
-    let sel = nextPieces.pop();
-    nextBlock.pattern = patterns[sel];
-    nextBlock.rot = Math.floor(Math.random() * nextBlock.pattern.length);
-    nextBlock.x = 0;
-    nextBlock.y = 0;
-    nextBlock.colorNum = Math.floor(Math.random() * blockColors.length) + 1;
-
+    // ensure STILL something to pull from
+    fillBag();
     
     return nextBlock;
 }
@@ -894,19 +911,14 @@ function updateGrid (grid, blocks, accents) {
                 stage.addChild(blocks[i][j]);
 
                 // add embellishments
-                accents[i][j].bottomLine.visible = true;
-                accents[i][j].sideLine.visible = true;
+                if (showBlockAccents) {
+                    accents[i][j].bottomLine.visible = true;
+                    accents[i][j].sideLine.visible = true;
+                }
+
+                // bring to front hack
                 stage.removeChild(accents[i][j].bottomLine); 
                 stage.removeChild(accents[i][j].sideLine); 
-
-                /*
-                accents[i][j].bottomLine = makeLine(blockTopLeftX, 
-                                  blockTopLeftY + blockWidth,
-                                  blockWidth, 
-                                  0,
-                                  white);
-                */
-
                 stage.addChild(accents[i][j].bottomLine); 
                 stage.addChild(accents[i][j].sideLine); 
 
@@ -1094,7 +1106,7 @@ function getFullRows (grid) {
 
     for (let i = 0; i < grid.length; i++) {
         if (sumRow(grid[i]) >= cols) {
-            console.log("SUM: ", i, sumRow(grid[i]));
+            //console.log("SUM: ", i, sumRow(grid[i]));
             rowList.push(i);
         } 
     }
@@ -1107,7 +1119,7 @@ function getFullRows (grid) {
 //     -- remove the row from the grid, shifting down 
 function removeRow (grid, i) {
 
-    console.log("REMOVING ROW: ", i);
+    //console.log("REMOVING ROW: ", i);
 
     // remove the row at index i 
     grid.splice(i,1);
@@ -1118,7 +1130,7 @@ function removeRow (grid, i) {
     // insert new row into grid at the top
     grid.splice(grid.length - 1, 0, newRow);
        
-    console.log("NEW GRID: ", grid);
+    //console.log("NEW GRID: ", grid);
 
     return;
 }
@@ -1150,12 +1162,15 @@ stage.addChild(txtCredits);
 startNewBlock();
 
 // initialize ghostBlock
-ghostBlock.y = 20;            // the only one that's different from active
+initGhostBlock();
 
-ghostBlock.x = activeBlock.x;
-ghostBlock.rot = activeBlock.rot;
-ghostBlock.pattern = activeBlock.pattern;
-ghostBlock.colorNum = activeBlock.colorNum;
+function initGhostBlock () {
+    ghostBlock.y = frozenGrid.length - 1;  // the only one that's different from active
+    ghostBlock.x = activeBlock.x;
+    ghostBlock.rot = activeBlock.rot;
+    ghostBlock.pattern = activeBlock.pattern;
+    ghostBlock.colorNum = activeBlock.colorNum;
+}
 
 
 /*
@@ -1206,7 +1221,7 @@ function update (ts) {
     let removed = 0;
     while (fullRows.length > 0) {
 
-        console.log("FULL ROWS: ", fullRows);
+        //console.log("FULL ROWS: ", fullRows);
 
         // remove one full row
         removeRow(frozenGrid, fullRows[0]);
@@ -1253,13 +1268,19 @@ function update (ts) {
 
     // transform the gamespace with the changes to the current active block
     let drawingGrid = flatten(activeBlock, frozenGrid);
-    drawingGrid = flatten(ghostBlock, drawingGrid);
+
+    if (showGhostPiece) {
+        drawingGrid = flatten(ghostBlock, drawingGrid);
+    }
 
     // match the graphical grid by asking the game grid what it should look like
     updateGrid(drawingGrid, blocks, accents);
 
 
 
+    if (showNextPiece) {
+        updateNextPiece();
+    }
 
 
 
@@ -1268,6 +1289,43 @@ function update (ts) {
         stage.addChild(txtGameOver);
     }
 
+}
+
+// draw the next block in the UI space
+function updateNextPiece () {
+
+    // peek at last item
+    let next = nextPieces[nextPieces.length - 1];
+    let p = next.pattern[next.rot];
+
+    // p needs rotation
+     
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 4; j++) {
+            stage.removeChild(previewBlocks[i][j]);
+
+            let blockTopLeftX = uiOffsetX + nextBlockOffsetX + 
+                                j * (blockWidth + blockMargin);
+            let blockTopLeftY = uiOffsetY + nextBlockOffsetY + 
+                                i * (blockWidth + blockMargin);
+
+            let newColor = getBlockColor(next.colorNum);
+ 
+            let pb = makeBlock(blockTopLeftX, blockTopLeftY, newColor);
+
+            previewBlocks[i][j] = pb;
+
+            // show if grid specifies
+            if (p[i][j]) {
+                previewBlocks[i][j].visible = true;
+            } else {
+                previewBlocks[i][j].visible = false;
+            }
+
+            stage.addChild(previewBlocks[i][j]);
+        }
+    }
+    
 }
 
 function dead () {
