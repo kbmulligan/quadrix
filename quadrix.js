@@ -37,7 +37,6 @@
         - Next piece display
         - Ghost piece
         - Lose if can't spawn
-        - 28 piece selection
 
 */
 
@@ -87,6 +86,7 @@ let uiMargin = {
 
 let uiElements = {width: 300, height: 200};
 let uiColor = darkgray;
+let borderColor = white;
 
 
 const EMPTY = 0;
@@ -243,7 +243,7 @@ var keyEsc = keyboard(esc);
 
 keyRight.press = function() {
     if (state == play) {
-        activeBlock.moveRight(frozenGrid);
+        moveRight(activeBlock, frozenGrid);
     }
 };
 keyRight.release = function() {
@@ -252,7 +252,7 @@ keyRight.release = function() {
 
 keyLeft.press = function() {
     if (state == play) {
-        activeBlock.moveLeft(frozenGrid);
+        moveLeft(activeBlock, frozenGrid);
     }
 };
 keyLeft.release = function() {
@@ -261,7 +261,7 @@ keyLeft.release = function() {
 
 keyUp.press = function() {
     if (state == play) {
-        activeBlock.rotate(frozenGrid);
+        rotate(activeBlock, frozenGrid);
     }
 };
 keyUp.release = function() {
@@ -352,7 +352,7 @@ function resetGame () {
     
 function resetLevel (level) {
     txtGameOver.visible = false;
-    activeBlock.startNewBlock();
+    startNewBlock();
     draw();
 }
 
@@ -583,7 +583,7 @@ function drawGrid (grid, blocks) {
                           gridOffsetY - borderMargin, 
                           (blockWidth + blockMargin) * (cols - WALL) + borderMargin * 2, 
                           (blockWidth + blockMargin) * (rows - FLOOR) + borderMargin * 2, 
-                          lightblue);
+                          borderColor);
 
     let borderInner = makeRectangle(
                           gridOffsetX, 
@@ -735,26 +735,27 @@ let block_o = [
 
 
 let patterns = [block_i, block_t, block_l, block_j, block_s, block_z, block_o];
+let allPatterns = [0,1,2,3,4,5,6];
 
 var activeBlock = {};
 var ghostBlock = {};
 
 
 // rotates current block to the next sequence
-activeBlock.rotate = function(g) {
+let rotate = function(b, g) {
 
     // advance rotation and wrap if too far
-    activeBlock.rot += 1;
-    if (activeBlock.rot >= activeBlock.pattern.length) {
-        activeBlock.rot = 0;
+    b.rot += 1;
+    if (b.rot >= b.pattern.length) {
+        b.rot = 0;
     }
 
     // reverse if would be invalid grid state
-    let proposedGrid = addGrids(activeBlock, normalizeGrid(g));
+    let proposedGrid = addGrids(b, normalizeGrid(g));
     if (hasOverlap(proposedGrid)) {
-        activeBlock.rot -= 1;
-        if (activeBlock.rot < 0) {
-            activeBlock.rot = activeBlock.pattern.length - 1;
+        b.rot -= 1;
+        if (b.rot < 0) {
+            b.rot = b.pattern.length - 1;
         }
         //console.log("ROTATE NOT A GREAT IDEA");
     }
@@ -762,18 +763,18 @@ activeBlock.rotate = function(g) {
     //console.log("ROTATE: ", activeBlock.rot);
 };
 
-activeBlock.moveLeft = function(g) {
+let moveLeft = function(b, g) {
 
     // move
-    activeBlock.x -= 1;
+    b.x -= 1;
 
     // limit
-    activeBlock.x = Math.max(activeBlock.x, 0); 
+    b.x = Math.max(b.x, 0); 
 
     // limit
-    let proposedGrid = addGrids(activeBlock, normalizeGrid(g));
+    let proposedGrid = addGrids(b, normalizeGrid(g));
     if (hasOverlap(proposedGrid)) {
-        activeBlock.x += 1;
+        b.x += 1;
         //console.log("BLOCK LEFT NOT A GREAT IDEA, OVERLAPS");
     }
 
@@ -781,24 +782,24 @@ activeBlock.moveLeft = function(g) {
 };
 
 
-activeBlock.moveRight = function(g) {
+let moveRight = function(b, g) {
 
     // move
-    activeBlock.x += 1;
+    b.x += 1;
 
     // limit
-    let proposedGrid = addGrids(activeBlock, normalizeGrid(g));
+    let proposedGrid = addGrids(b, normalizeGrid(g));
     if (hasOverlap(proposedGrid)) {
-        activeBlock.x -= 1;
+        b.x -= 1;
         //console.log("BLOCK RIGHT NOT A GREAT IDEA, OVERLAPS");
     }
 
     //console.log("BLOCK RIGHT");
 };
 
-activeBlock.start = function() {
-    activeBlock.y = frozenGrid.length - 1;
-    activeBlock.x = Math.floor(Math.random() * 4) + 3;
+let start = function(b) {
+    b.y = frozenGrid.length - 1;
+    b.x = Math.floor(Math.random() * 4) + 3;
 };
 
 
@@ -807,20 +808,20 @@ function plant (block, g) {
     return newGrid;
 };
 
-activeBlock.startNewBlock = function() {
-    activeBlock.getNewBlock();
-    activeBlock.start();
+let startNewBlock = function() {
+    activeBlock = getNewBlock();
+    start(activeBlock);
 
     let proposedGrid = addGrids(activeBlock, normalizeGrid(frozenGrid));
     if (hasOverlap(proposedGrid)) {
         console.log("CANNOT START NEW BLOCK"); 
-        activeBlock.y += 3;
+        //activeBlock.y += 3;
         gameDead = true;
     }
 
 }
 
-activeBlock.getNewBlock = function() {
+let getNewBlock = function() {
     let selection = Math.floor(Math.random() * patterns.length);
 
     if (debugMode)  {
@@ -832,9 +833,44 @@ activeBlock.getNewBlock = function() {
     activeBlock.rot = Math.floor(Math.random() * activeBlock.pattern.length);
 
     // add color
-    activeBlock.colorNum = Math.floor(Math.random() * blockColors.length) + 1;
+  
+    // random color
+    // activeBlock.colorNum = 
+  
+    // deterministic color based on pattern
+    //activeBlock.colorNum = selection + 1;
 
     //console.log("NEW BLOCK:", selection, activeBlock.rot);
+
+    return getNextBlock();
+}
+
+function fillBag () {
+    // make sure nextPieces has numbers in it
+    if (nextPieces.length <= 0) {
+        nextPieces = allPatterns.slice();
+        nextPieces = shuffleArray(nextPieces);
+    }
+
+    console.log("BAG FILLED: ", nextPieces);
+}
+
+function getNextBlock () {
+
+    fillBag();
+
+    let nextBlock = {};
+
+    // take pattern from next pieces queue
+    let sel = nextPieces.pop();
+    nextBlock.pattern = patterns[sel];
+    nextBlock.rot = Math.floor(Math.random() * nextBlock.pattern.length);
+    nextBlock.x = 0;
+    nextBlock.y = 0;
+    nextBlock.colorNum = Math.floor(Math.random() * blockColors.length) + 1;
+
+    
+    return nextBlock;
 }
 
 // go through the game grid and update the block graphics
@@ -928,7 +964,7 @@ function dropOne (b) {
 
         b.y += 1;
         frozenGrid = plant(b, frozenGrid);
-        b.startNewBlock();
+        startNewBlock();
 
     } else {
         dropped = true; 
@@ -1111,7 +1147,7 @@ stage.addChild(txtGameOver);
 stage.addChild(txtCredits);
 
 // initialize activeBlock
-activeBlock.startNewBlock();
+startNewBlock();
 
 // initialize ghostBlock
 ghostBlock.y = 20;            // the only one that's different from active
@@ -1120,6 +1156,16 @@ ghostBlock.x = activeBlock.x;
 ghostBlock.rot = activeBlock.rot;
 ghostBlock.pattern = activeBlock.pattern;
 ghostBlock.colorNum = activeBlock.colorNum;
+
+
+/*
+let test = [0,1,2,3,4,5,6];
+console.log(test);
+let newTest = shuffleArray(test);
+console.log(test);
+console.log(newTest);
+*/
+
 
 
 // GOGO GADGET GAMELOOP!!!
@@ -1212,6 +1258,11 @@ function update (ts) {
     // match the graphical grid by asking the game grid what it should look like
     updateGrid(drawingGrid, blocks, accents);
 
+
+
+
+
+
     if (dead()) { 
         stage.removeChild(txtGameOver);
         stage.addChild(txtGameOver);
@@ -1221,6 +1272,19 @@ function update (ts) {
 
 function dead () {
     return gameDead;
+}
+
+// this will mutate array a
+function shuffleArray (a) {
+
+    let b = [];
+    
+    while (a.length > 0) {
+        let i = Math.floor(Math.random() * a.length);
+        b.push(a.splice(i,1)[0]);
+    } 
+
+    return b;
 }
 
 function normalizeRow (row) {
