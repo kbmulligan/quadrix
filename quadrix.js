@@ -36,7 +36,8 @@
     TODO: 
         - Next piece display
         - Ghost piece
-        - Hard drop
+        - Lose if can't spawn
+        - 28 piece selection
 
 */
 
@@ -46,12 +47,14 @@
 var Text = PIXI.Text;
 
 //colors
-var blue = 0x66CCFF;
+var blue = 0x0000FF;
+var lightblue = 0x66CCFF;
 var red = 0xFF0000;
 var green = 0x00FF00;
 var yellow = 0xFFFF00;
 var orange = 0xFFA500;
 var purple = 0xFF00FF;
+var cyan = 0x00FFFF;
 var greenNeon1 = 0x39FF14;
 var greenNeon2 = 0x1cb200;
 var white = 0xffffff;
@@ -60,6 +63,7 @@ var lightgray = 0xbbbbbb;
 var darkgray = 0x555555;
 
 var blockColor = greenNeon1; 
+var accentColor = white; 
 var textColor = white;
 
 // these are mapped in the function getBlockColor
@@ -71,11 +75,25 @@ var blockLength = 20,
     blockWidth = 22,
     blockMargin = 2;
 let borderMargin = 5;
+let borderWidth = 5;
+
+
+let uiMargin = {
+                left: 20,
+                top: 50,
+                right: 20,
+                bottom: 50
+               };
+
+let uiElements = {width: 300, height: 200};
+let uiColor = darkgray;
+
 
 const EMPTY = 0;
 const FULL = 1;
 const FLOOR = 5;
 const WALL = 5;
+
 
 
 // Games vars
@@ -86,9 +104,11 @@ var state = pause,
     lines = 0,
     startingLives = 3;
 
+let gameDead = false;
+
 let gameTime = 0;
 let gameTick = 500;     
-let acceleration = 0.95;     // how quickly the game speeds up when a line is cleared
+let acceleration = 0.99;     // how quickly the game speeds up when a line is cleared
                              // lower is faster 
 
 let lastAdvance = 0;     
@@ -103,8 +123,10 @@ let cols = 15;
 let gridOffsetX = innerWidth * 0.5 - ((blockWidth + blockMargin) * (cols - WALL)/2);
 let gridOffsetY = 50;
 
-let uiOffsetX = innerWidth * 0.05;
-let uiOffsetY = 50;
+let uiOffsetX = uiMargin.left * 2;
+let uiOffsetY = uiMargin.top + uiMargin.left;
+
+let nextPieces = []; 
 
 // AI/Cheat
 
@@ -113,6 +135,7 @@ var debugMode = false,
     mouseControl = true;
 let showBorder = true;
 let debugShowAllGrid = false;
+let showGhostPiece = true;
 
 
 // Texts
@@ -260,7 +283,9 @@ keyEsc.release = function () {
 };
 
 keySpace.press = function() {
-    hardDrop(activeBlock, frozenGrid); 
+    if (state == play) {
+        hardDrop(activeBlock, frozenGrid); 
+    }
 };
 keySpace.release = function() {
     //togglePause();
@@ -327,8 +352,7 @@ function resetGame () {
     
 function resetLevel (level) {
     txtGameOver.visible = false;
-    activeBlock.start();
-    activeBlock.getNewBlock();
+    activeBlock.startNewBlock();
     draw();
 }
 
@@ -398,6 +422,17 @@ txtLevel.alpha = 0.9;
 txtPaused.alpha = 1.0;
 txtGameOver.alpha = 1.0;
 
+function makeBorder (initx, inity, length, width, color) {
+    var rectangle = new PIXI.Graphics();
+    rectangle.lineStyle(borderWidth, color, 1.0, 0.5, false);
+    rectangle.drawRect(0, 0, length, width);
+    rectangle.x = initx;
+    rectangle.y = inity;
+    rectangle.vx = 0;
+    rectangle.vy = 0;
+
+    return rectangle;
+}
 
 function makeRectangle (initx, inity, length, width, color) {
     var rectangle = new PIXI.Graphics();
@@ -431,11 +466,13 @@ function makeBlock (initx, inity, color) {
     return block;
 }
 
-function makeLine (initx, initx, movex, movey, color) {
+function makeLine (initx, inity, movex, movey, color) {
     let line = new PIXI.Graphics();
-    line.beginFill(color);
+    line.lineStyle(4, color, 0.5, 1.0, false); 
+    //line.beginFill();
+    line.moveTo(0, 0);
     line.lineTo(movex, movey);
-    line.endFill();
+    //line.endFill();
     line.x = initx;
     line.y = inity;
     line.vx = 0;
@@ -445,13 +482,15 @@ function makeLine (initx, initx, movex, movey, color) {
 }
 
 // create grid and all possible blocks in the grid
-let frozenGrid = [];
-let blocks = [];
-let blocksBackground = [];
+let frozenGrid = [];                                // model of play grid
+let blocks = [];                                    // 2D array of graphic blocks
+let blocksBackground = [];                          // 2D array of graphic blocks
+let accents = [];                                   // 2D array of graphic changes
 
 initGrid(frozenGrid);
 initBlocks(blocks, blockColor);
 initBlocks(blocksBackground, black);
+initAccents(accents);
 drawGrid(frozenGrid, blocks);
 
 // initialize grid with blocks 
@@ -486,31 +525,72 @@ function initBlocks (blocks, color) {
     }
 }
 
+// initialize all graphical accent elements for each block
+function initAccents (accents) {
+    for (var i = 0; i < rows; i++) {
+        accents.push([]);
+        for (var j = 0; j < cols; j++) {
+
+            // setup helper vars
+            let blockTopLeftX = gridOffsetX + j * (blockWidth + blockMargin);
+            let blockTopLeftY = gridOffsetY + (rows-1) * (blockWidth + blockMargin) 
+                                - i * (blockWidth + blockMargin);
+
+            // add embellishments
+            let accent = {};
+            accent.bottomLine = makeLine(
+                                  blockTopLeftX, 
+                                  blockTopLeftY + blockWidth,
+                                  blockWidth, 
+                                  0,
+                                  accentColor 
+                                  );
+            accent.sideLine = makeLine(
+                                  blockTopLeftX, 
+                                  blockTopLeftY,
+                                  0, 
+                                  blockWidth,
+                                  accentColor 
+                                  );
+
+            // add to blocks array for future reference
+            accents[i].push(accent); 
+        }
+    }
+}
+
+// initial draw cycle for background and all visible blocks 
 function drawGrid (grid, blocks) {
 
-    // border/background
-    /*
-    let border1 = makeRectangle(gridOffsetX - blockMargin, 
-                               gridOffsetY - blockMargin, 
-                               (blockWidth + blockMargin) * cols + blockMargin, 
-                               (blockWidth + blockMargin) * rows + blockMargin, 
-                               darkgray);
-    stage.addChild(border1);
-    */
+
+    // UI Borders 
+    let borderUI = makeBorder(uiMargin.left, 
+                              uiMargin.top, 
+                              uiElements.width, 
+                              uiElements.height, 
+                              uiColor);
+    stage.addChild(borderUI);
+
+    let borderNext = makeBorder(uiMargin.left, 
+                                uiMargin.top * 2 + uiElements.height, 
+                                uiElements.width, 
+                                uiElements.height, 
+                                uiColor);
+    stage.addChild(borderNext);
 
     let borderOuter = makeRectangle(
                           gridOffsetX - borderMargin, 
                           gridOffsetY - borderMargin, 
                           (blockWidth + blockMargin) * (cols - WALL) + borderMargin * 2, 
                           (blockWidth + blockMargin) * (rows - FLOOR) + borderMargin * 2, 
-                          blue);
+                          lightblue);
+
     let borderInner = makeRectangle(
                           gridOffsetX, 
                           gridOffsetY, 
                           (blockWidth + blockMargin) * (cols - WALL) - blockMargin, 
                           (blockWidth + blockMargin) * (rows - FLOOR) - blockMargin, 
                           black);
-
 
     if (showBorder) {
         stage.addChild(borderOuter);
@@ -524,14 +604,17 @@ function drawGrid (grid, blocks) {
             // add to stage for render
             //stage.addChild(blocksBackground[i][j]);
             stage.addChild(blocks[i][j]);
+            stage.addChild(accents[i][j].bottomLine);
             // console.log("block added to stage", i, j);
 
             // only turn it on if the grid says so
             let inPlayableArea = i >= FLOOR && j < cols - WALL;
             if (grid[i][j] && (inPlayableArea || debugShowAllGrid)) {
                 blocks[i][j].visible = true;
+                accents[i][j].bottomLine.visible = true;
             } else {
                 blocks[i][j].visible = false;
+                accents[i][j].bottomLine.visible = false;
             }
         }
     }
@@ -724,6 +807,18 @@ function plant (block, g) {
     return newGrid;
 };
 
+activeBlock.startNewBlock = function() {
+    activeBlock.getNewBlock();
+    activeBlock.start();
+
+    let proposedGrid = addGrids(activeBlock, normalizeGrid(frozenGrid));
+    if (hasOverlap(proposedGrid)) {
+        console.log("CANNOT START NEW BLOCK"); 
+        activeBlock.y += 3;
+        gameDead = true;
+    }
+
+}
 
 activeBlock.getNewBlock = function() {
     let selection = Math.floor(Math.random() * patterns.length);
@@ -743,7 +838,7 @@ activeBlock.getNewBlock = function() {
 }
 
 // go through the game grid and update the block graphics
-function updateGrid (grid, blocks) {
+function updateGrid (grid, blocks, accents) {
 
     // check all possible blocks
     for (var i = 0; i < rows; i++) {
@@ -754,26 +849,40 @@ function updateGrid (grid, blocks) {
                 blocks[i][j].visible = true;
                 stage.removeChild(blocks[i][j]);
 
+                let blockTopLeftX = gridOffsetX + j * (blockWidth + blockMargin);
+                let blockTopLeftY = gridOffsetY + (rows-1) * (blockWidth + blockMargin) 
+                                    - i * (blockWidth + blockMargin);
+
                 let blockColor = getBlockColor(grid[i][j]);
-                blocks[i][j] = makeBlock(gridOffsetX + j * (blockWidth + blockMargin), 
-                                   gridOffsetY + (rows-1) * (blockWidth + blockMargin)
-                                   - i * (blockWidth + blockMargin), 
-                                   blockColor);
+                blocks[i][j] = makeBlock(blockTopLeftX, blockTopLeftY, blockColor);
                 stage.addChild(blocks[i][j]);
 
                 // add embellishments
+                accents[i][j].bottomLine.visible = true;
+                accents[i][j].sideLine.visible = true;
+                stage.removeChild(accents[i][j].bottomLine); 
+                stage.removeChild(accents[i][j].sideLine); 
+
                 /*
-                let botLine = makeLine(gridOffsetX + j * (blockWidth + blockMargin), 
-                                   gridOffsetY + (rows-1) * (blockWidth + blockMargin)
-                                   - i * (blockWidth + blockMargin), 
-                                   white);
-                stage.addChild(botLine);
+                accents[i][j].bottomLine = makeLine(blockTopLeftX, 
+                                  blockTopLeftY + blockWidth,
+                                  blockWidth, 
+                                  0,
+                                  white);
                 */
+
+                stage.addChild(accents[i][j].bottomLine); 
+                stage.addChild(accents[i][j].sideLine); 
+
             } else {
                 blocks[i][j].visible = false;
+                accents[i][j].bottomLine.visible = false;
+                accents[i][j].sideLine.visible = false;
             }
         }
     }
+
+    
 
     return true;
 }
@@ -800,7 +909,7 @@ function getBlockColor (num) {
         color = purple;
     } 
     if (num == 7) {
-        color = white;
+        color = cyan;
     } 
 
     return color;
@@ -819,8 +928,7 @@ function dropOne (b) {
 
         b.y += 1;
         frozenGrid = plant(b, frozenGrid);
-        b.start();
-        b.getNewBlock();
+        b.startNewBlock();
 
     } else {
         dropped = true; 
@@ -829,20 +937,60 @@ function dropOne (b) {
     return dropped;
 }
 
-// given grid g, move block b down all possible rows until 
-// it would be stop and lock it
-function hardDrop (b, g) {
+// returns true if the block b can move 1 row down, given grid g
+function canDrop (b, g) {
+    let clear = false;
 
-    let didDrop = dropOne(b);
-    while (didDrop) {
+    b.y -= 1;
+    let proposedGrid = addGrids(b, normalizeGrid(g));
+    b.y += 1;
+
+    if (!hasOverlap(proposedGrid)) {
+        clear = true;
+    }
+
+    return clear;
+}
+
+// 
+function doDrop (b, g) {
+    let dropped = true;
+
+    b.y -= 1;
+
+    return dropped;
+}
+
+function getGhostPiece (b, g) {
+    let shadow = null;
+
     
-        didDrop = dropOne(b);
-    } 
 
+    return shadow;
+} 
+
+// given grid g, move block b down all possible rows until 
+// it would be stop
+function ghostDrop (b, g) {
+    let clearBelow = canDrop(b, g);
+    while (clearBelow) {
+        doDrop(b, g) 
+        clearBelow = canDrop(b, g);
+    } 
     return;
 }
 
-// given a block and a grid, return a new grid with block written in
+// given grid g, move block b down all possible rows until 
+// it would stop and lock it
+function hardDrop (b, g) {
+    let didDrop = dropOne(b);
+    while (didDrop) {
+        didDrop = dropOne(b);
+    } 
+    return;
+}
+
+// given a block and a grid, return a new grid with block written into it 
 // LOGICAL OR THE CONTENTS OF EACH CELL
 function flatten (b, grid) {
     let flatGrid = [];
@@ -963,14 +1111,16 @@ stage.addChild(txtGameOver);
 stage.addChild(txtCredits);
 
 // initialize activeBlock
-activeBlock.start();
-activeBlock.getNewBlock();
+activeBlock.startNewBlock();
 
-/*
-let test = [0,1,2,3,4,105];
-console.log(test);
-console.log(normalizeRow(test));
-*/
+// initialize ghostBlock
+ghostBlock.y = 20;            // the only one that's different from active
+
+ghostBlock.x = activeBlock.x;
+ghostBlock.rot = activeBlock.rot;
+ghostBlock.pattern = activeBlock.pattern;
+ghostBlock.colorNum = activeBlock.colorNum;
+
 
 // GOGO GADGET GAMELOOP!!!
 console.log("Game loop starting...");
@@ -1022,18 +1172,14 @@ function update (ts) {
     }
 
     if (removed > 0) {
-        score += removed*removed * 10; 
+        score += removed * removed * 50; 
         lines += removed;
 
         // increase speed
         gameTick *= acceleration;
     }
 
-
-    
-
-
-    if (dead(frozenGrid)) {
+    if (dead()) {
         txtGameOver.visible = true;
         pauseGame();
         console.log("Appears this is a dead game state.");
@@ -1047,33 +1193,34 @@ function update (ts) {
     // DO THIS STUFF ALL THE TIME AS FAST AS POSSIBLE
 
     // update location of ghost piece
-    while (false) {
+    ghostBlock.x = activeBlock.x;
+    ghostBlock.rot = activeBlock.rot;
+    ghostBlock.pattern = activeBlock.pattern;
+    ghostBlock.colorNum = activeBlock.colorNum;
 
-    }
+    ghostBlock.y = activeBlock.y;
+    ghostDrop(ghostBlock, frozenGrid);
 
 
-    // faster drop for keyDown
-    if (keyDown.isDown && ts > lastAdvance + dropTime ) {
-        lastAdvance = ts;
-        dropOne(activeBlock);
-    }
+
+
 
     // transform the gamespace with the changes to the current active block
     let drawingGrid = flatten(activeBlock, frozenGrid);
+    drawingGrid = flatten(ghostBlock, drawingGrid);
 
     // match the graphical grid by asking the game grid what it should look like
-    updateGrid(drawingGrid, blocks);
+    updateGrid(drawingGrid, blocks, accents);
+
+    if (dead()) { 
+        stage.removeChild(txtGameOver);
+        stage.addChild(txtGameOver);
+    }
 
 }
 
-function dead (g) {
-   
-    // select top row from  
-    let topRow = g[g.length - 1]; 
-
-    // say dead if any permanent blocks occupy first row
-    // return  sumRow(topRow) >= 0;
-    return false;
+function dead () {
+    return gameDead;
 }
 
 function normalizeRow (row) {
@@ -1095,7 +1242,7 @@ function sumRow (row) {
 }
 
 function won () {
-    return score > levelUpScore;
+    return lines > lines * level;
 }
 
 function anyVisible (sprites) {
