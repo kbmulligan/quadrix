@@ -176,8 +176,8 @@ var stage = new PIXI.Container();
 
 
 // link tink
-var t = new Tink(PIXI, renderer.view);
-var pointer = t.makePointer();
+//var t = new Tink(PIXI, renderer.view);
+//var pointer = t.makePointer();
 
 
 // UTILITY FUNCTIONS ////////////////////////////////////////////////
@@ -308,6 +308,7 @@ keyEnter.release = function () {
     pauseGame();
 };
 
+/*
 pointer.tap = function () {
     // console.log("The pointer was tapped.");
     ;
@@ -323,18 +324,17 @@ pointer.release = function () {
     // console.log("The pointer was released.");
     ;
 };
+*/
 
 // GAME CONTROL /////////////////////////////////////////////////////
 function pauseGame () {
     txtPaused.visible = true;
-    pointer.visible = true;
 
     state = pause;
 }
 
 function unPauseGame () {
     txtPaused.visible = false;
-    //pointer.visible = false;
 
     state = play;
 }
@@ -1247,7 +1247,7 @@ function distance (ax, ay, bx, by) {
 // MAIN GAME LOOP ///////////////////////////////////////////////////
 function gameLoop (timestamp) {
     requestAnimationFrame(gameLoop);
-    t.update();
+    //t.update();
     state(timestamp);
     draw();
 }
