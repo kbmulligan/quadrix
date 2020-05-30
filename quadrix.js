@@ -34,8 +34,9 @@
 /**
 
     TODO: 
-        - Ghost piece shadow
-        - Lose if can't spawn
+        - Hold key down to move
+        - Hiscores 
+        - Hold block ability 
 
 */
 
@@ -74,6 +75,7 @@ var blockLength = 20,
     blockMargin = 2;
 let borderMargin = 5;
 let borderWidth = 5;
+let outlineWidth = 1;
 
 
 let uiMargin = {
@@ -139,6 +141,8 @@ let debugShowAllGrid = false;
 let showGhostPiece = true;
 let showBlockAccents = false;
 let showNextPiece = true;
+
+let linesPerLevel = 2;
 
 
 // Texts
@@ -351,18 +355,27 @@ function resetGame () {
     score = 0;
     lines = 0;
     level = 1;
+ 
+    frozenGrid = [];
+    initGrid(frozenGrid);
+    gameDead = false;
+
+    update();
+
+    console.log("GAME RESET");
 }
     
 function resetLevel (level) {
-    txtGameOver.visible = false;
-    startNewBlock();
-    draw();
+    //txtGameOver.visible = false;
+    //startNewBlock();
+    lineGoal = lines + linesPerLevel * level;
+    //draw();
 }
 
 function nextLevel (jump) {
     level += jump;
     resetLevel(level);
-    pauseGame();
+    //pauseGame();
 }
 
 // GAME TEXTS ///////////////////////////////////////////////////////
@@ -425,6 +438,18 @@ txtLevel.alpha = 0.9;
 txtPaused.alpha = 1.0;
 txtGameOver.alpha = 1.0;
 
+function makeOutline (initx, inity, length, width, color) {
+    var rectangle = new PIXI.Graphics();
+    rectangle.lineStyle(outlineWidth, color, 1.0, 0.5, false);
+    rectangle.drawRect(0, 0, length, width);
+    rectangle.x = initx;
+    rectangle.y = inity;
+    rectangle.vx = 0;
+    rectangle.vy = 0;
+
+    return rectangle;
+}
+
 function makeBorder (initx, inity, length, width, color) {
     var rectangle = new PIXI.Graphics();
     rectangle.lineStyle(borderWidth, color, 1.0, 0.5, false);
@@ -464,8 +489,15 @@ function makeCircle (initx, inity, radius, color) {
     return circle;
 }
 
-function makeBlock (initx, inity, color) {
-    var block = makeRectangle(initx, inity, blockWidth, blockWidth, color)
+function makeBlock (initx, inity, color, hollow) {
+    var block = null;
+
+    if (hollow) {
+        block = makeOutline(initx, inity, blockWidth, blockWidth, color)
+    } else {
+        block = makeRectangle(initx, inity, blockWidth, blockWidth, color)
+    }
+
     return block;
 }
 
@@ -533,7 +565,7 @@ function initBlocks (blocks, color) {
             let blockx = makeBlock(gridOffsetX + j * (blockWidth + blockMargin), 
                                    gridOffsetY + (rows-1) * (blockWidth + blockMargin)
                                    - i * (blockWidth + blockMargin), 
-                                   color);
+                                   color, false);
 
             // add to blocks array for future reference
             blocks[i].push(blockx); 
@@ -827,16 +859,19 @@ function plant (block, g) {
 };
 
 let startNewBlock = function() {
-    activeBlock = getNewBlock();
-    start(activeBlock);
+    if (gameDead) { 
+        console.log("CANNOT START NEW BLOCK: GAME DEAD, RESET FIRST");
+    } else {
+        activeBlock = getNewBlock();
+        start(activeBlock);
 
-    let proposedGrid = addGrids(activeBlock, normalizeGrid(frozenGrid));
-    if (hasOverlap(proposedGrid)) {
-        console.log("CANNOT START NEW BLOCK"); 
-        //activeBlock.y += 3;
-        gameDead = true;
+        let proposedGrid = addGrids(activeBlock, normalizeGrid(frozenGrid));
+        if (hasOverlap(proposedGrid)) {
+            console.log("CANNOT START NEW BLOCK, HAS OVERLAP"); 
+            //activeBlock.y += 3;
+            gameDead = true;
+        }
     }
-
 }
 
 let getNewBlock = function() {
@@ -867,6 +902,7 @@ function fillBag () {
             piece.x = 0;
             piece.y = 0;
             piece.colorNum = Math.floor(Math.random() * blockColors.length) + 1;
+            piece.isGhost = false;
   
             nextPieces.push(piece);
         }
@@ -906,8 +942,16 @@ function updateGrid (grid, blocks, accents) {
                 let blockTopLeftY = gridOffsetY + (rows-1) * (blockWidth + blockMargin) 
                                     - i * (blockWidth + blockMargin);
 
-                let blockColor = getBlockColor(grid[i][j]);
-                blocks[i][j] = makeBlock(blockTopLeftX, blockTopLeftY, blockColor);
+                let blockColor = getBlockColor(grid[i][j] % 10);
+                let newBlock = null;
+
+                if (grid[i][j] > 10) {
+                    newBlock = makeBlock(blockTopLeftX, blockTopLeftY, blockColor, true);
+                } else {
+                    newBlock = makeBlock(blockTopLeftX, blockTopLeftY, blockColor, false);
+                }
+                
+                blocks[i][j] = newBlock;
                 stage.addChild(blocks[i][j]);
 
                 // add embellishments
@@ -1054,7 +1098,12 @@ function flatten (b, grid) {
             let blockCell = b.pattern[b.rot][j][i];
             let gridCell = flatGrid[b.y - j][b.x + i];
             if (blockCell > 0) {
-                flatGrid[b.y - j][b.x + i] = blockCell * b.colorNum;
+                let ghostAdd = 0;
+                if (b.isGhost) {
+                    ghostAdd = 10;
+                }
+                flatGrid[b.y - j][b.x + i] = blockCell * b.colorNum + ghostAdd;
+                
             } else {
                 flatGrid[b.y - j][b.x + i] = gridCell;
             }
@@ -1170,6 +1219,7 @@ function initGhostBlock () {
     ghostBlock.rot = activeBlock.rot;
     ghostBlock.pattern = activeBlock.pattern;
     ghostBlock.colorNum = activeBlock.colorNum;
+    ghostBlock.isGhost = true;
 }
 
 
@@ -1184,6 +1234,7 @@ console.log(newTest);
 
 
 // GOGO GADGET GAMELOOP!!!
+resetLevel(1);
 console.log("Game loop starting...");
 gameLoop();
 
@@ -1256,7 +1307,13 @@ function update (ts) {
     // update location of ghost piece
     ghostBlock.x = activeBlock.x;
     ghostBlock.rot = activeBlock.rot;
+
+    let pats = [];
     ghostBlock.pattern = activeBlock.pattern;
+
+
+
+
     ghostBlock.colorNum = activeBlock.colorNum;
 
     ghostBlock.y = activeBlock.y;
@@ -1267,11 +1324,16 @@ function update (ts) {
 
 
     // transform the gamespace with the changes to the current active block
-    let drawingGrid = flatten(activeBlock, frozenGrid);
+    
+    let drawingGrid = null;
 
     if (showGhostPiece) {
-        drawingGrid = flatten(ghostBlock, drawingGrid);
+        drawingGrid = flatten(ghostBlock, frozenGrid);
+        drawingGrid = flatten(activeBlock, drawingGrid);
+    } else {
+        drawingGrid = flatten(activeBlock, frozenGrid);
     }
+
 
     // match the graphical grid by asking the game grid what it should look like
     updateGrid(drawingGrid, blocks, accents);
@@ -1311,7 +1373,7 @@ function updateNextPiece () {
 
             let newColor = getBlockColor(next.colorNum);
  
-            let pb = makeBlock(blockTopLeftX, blockTopLeftY, newColor);
+            let pb = makeBlock(blockTopLeftX, blockTopLeftY, newColor, false);
 
             previewBlocks[i][j] = pb;
 
@@ -1364,7 +1426,7 @@ function sumRow (row) {
 }
 
 function won () {
-    return lines > lines * level;
+    return lines >= lineGoal;
 }
 
 function anyVisible (sprites) {
