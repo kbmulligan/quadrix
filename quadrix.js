@@ -6,7 +6,7 @@
  * Author: kbmulligan
  * Date started: May 2020
  * Latest Edits: May 2020
- * Version: 0.1
+ * Version: 0.2
  * digmshiphter@gmail.com
  * Twitter: n1t0r
  
@@ -34,10 +34,16 @@
 /**
 
     TODO: 
+        - UI
+          - Title
+          - Next
+          - Help --> Controls
+        - Hold block ability 
+        - Timing schedule
+        - Resize
         - Hold key down to move
         - Hiscores 
-        - Hold block ability 
-
+        - Tink controls
 */
 
 //Test that Pixi is working
@@ -80,7 +86,7 @@ let outlineWidth = 1;
 
 let uiMargin = {
                 left: 20,
-                top: 50,
+                top: 100,
                 right: 20,
                 bottom: 50
                };
@@ -109,7 +115,7 @@ let gameDead = false;
 
 let gameTime = 0;
 let gameTick = 500;     
-let acceleration = 0.99;     // how quickly the game speeds up when a line is cleared
+let acceleration = 0.95;     // how quickly the game speeds up when a line is cleared
                              // lower is faster 
 
 let lastAdvance = 0;     
@@ -142,7 +148,7 @@ let showGhostPiece = true;
 let showBlockAccents = false;
 let showNextPiece = true;
 
-let linesPerLevel = 2;
+let linesPerLevel = 5;
 
 
 // Texts
@@ -239,6 +245,7 @@ var right = 39;
 var space = 32;
 var enter = 13;
 var esc = 27;
+let keycodeP = 80; 
 
 var keyLeft = keyboard(left);
 var keyRight = keyboard(right);
@@ -247,6 +254,7 @@ var keyDown = keyboard(down);
 var keySpace = keyboard(space);
 var keyEnter = keyboard(enter);
 var keyEsc = keyboard(esc);
+var keyP = keyboard(keycodeP);
 
 keyRight.press = function() {
     if (state == play) {
@@ -286,6 +294,13 @@ keyEsc.press = function() {
     ;
 };
 keyEsc.release = function () {
+    togglePause();
+};
+
+keyP.press = function() {
+    ;
+};
+keyP.release = function () {
     togglePause();
 };
 
@@ -358,6 +373,7 @@ function resetGame () {
  
     frozenGrid = [];
     initGrid(frozenGrid);
+    startNewBlock();
     gameDead = false;
 
     update();
@@ -366,10 +382,12 @@ function resetGame () {
 }
     
 function resetLevel (level) {
-    //txtGameOver.visible = false;
-    //startNewBlock();
+    
+    // base drop timing on level
+    gameTick *= acceleration;
+ 
+    // base next level's goalpost on current lines plus current level
     lineGoal = lines + linesPerLevel * level;
-    //draw();
 }
 
 function nextLevel (jump) {
@@ -384,6 +402,29 @@ var defaultFont = {fontFamily: "Courier",
                    fontWeight: "bold",
                    fill: textColor, 
                    align: "center"};
+
+var helpFont =    {fontFamily: "Courier", 
+                   fontSize: 16, 
+                   fontWeight: "bold",
+                   fill: textColor, 
+                   align: "center"};
+
+let titleFont =   {fontFamily: "Courier", 
+                   fontSize: 64, 
+                   fontWeight: "bold",
+                   fill: greenNeon1, 
+                   align: "center"};
+
+let txtTitle = new Text(
+  "QUADRIX",
+  titleFont 
+);
+
+let txtNext = new Text(
+  "NEXT",
+  defaultFont
+);
+
 var txtLives = new Text(
   livesLabel + lives,
   defaultFont 
@@ -420,17 +461,61 @@ var txtCredits = new Text(
   defaultFont
 );
 
+let txtHelpPause = new Text(
+  "ESC => (UN)PAUSE",
+  helpFont
+);
+
+let txtHelpReset = new Text(
+  "ENTER => RESET",
+  helpFont
+);
+let txtHelpLeft = new Text(
+  "LEFT => MOVE LEFT",
+  helpFont
+);
+let txtHelpRight = new Text(
+  "RIGHT => MOVE RIGHT",
+  helpFont
+);
+let txtHelpRotate = new Text(
+  "UP = > ROTATE",
+  helpFont
+);
+let txtHelpHardDrop = new Text(
+  "SPACE => DROP IN PLACE",
+  helpFont
+);
 
 txtGameOver.visible = false;
 txtPaused.visible = true;
 txtCredits.visible = false;
 
+txtTitle.position.set(uiOffsetX, 20);
+txtNext.position.set(uiOffsetX + uiMargin.left + uiElements.width/2 - txtNext.width, 
+                     uiMargin.top * 1.5 + uiElements.height);
+                                
 txtScore.position.set(uiOffsetX, uiOffsetY + txtScore.height * 0.1);
 txtLines.position.set(uiOffsetX, uiOffsetY + txtScore.height * 1.1);
 txtLevel.position.set(uiOffsetX, uiOffsetY + txtScore.height * 2.1);
 txtLives.position.set(uiOffsetX, uiOffsetY + txtScore.height * 4.1);
 txtPaused.position.set(window.innerWidth/2 - txtPaused.width/2, window.innerHeight*0.85);
 txtGameOver.position.set(window.innerWidth/2 - txtGameOver.width/2, window.innerHeight*0.5);
+
+txtHelpPause.position.set(uiOffsetX, 
+                     uiMargin.top * 2 + uiElements.height * 2);
+txtHelpReset.position.set(uiOffsetX, 
+                     uiMargin.top * 2 + uiElements.height * 2 + txtHelpPause.height * 1.1);
+txtHelpLeft.position.set(uiOffsetX, 
+                     uiMargin.top * 2 + uiElements.height * 2 + txtHelpPause.height * 2.1);
+txtHelpRight.position.set(uiOffsetX, 
+                     uiMargin.top * 2 + uiElements.height * 2 + txtHelpPause.height * 3.1);
+txtHelpRotate.position.set(uiOffsetX, 
+                     uiMargin.top * 2 + uiElements.height * 2 + txtHelpPause.height * 4.1);
+txtHelpHardDrop.position.set(uiOffsetX, 
+                     uiMargin.top * 2 + uiElements.height * 2 + txtHelpPause.height * 5.1);
+
+
 
 txtScore.alpha = 0.9;
 txtLives.alpha = 0.9;
@@ -620,7 +705,7 @@ function drawGrid (grid, blocks) {
     stage.addChild(borderUI);
 
     let borderNext = makeBorder(uiMargin.left, 
-                                uiMargin.top * 2 + uiElements.height, 
+                                uiMargin.top * 1.5 + uiElements.height, 
                                 uiElements.width, 
                                 uiElements.height, 
                                 uiColor);
@@ -901,7 +986,10 @@ function fillBag () {
             piece.rot = Math.floor(Math.random() * piece.pattern.length);
             piece.x = 0;
             piece.y = 0;
-            piece.colorNum = Math.floor(Math.random() * blockColors.length) + 1;
+            //piece.colorNum = Math.floor(Math.random() * blockColors.length) + 1;
+
+            // color based on pattern
+            piece.colorNum = i + 1;
             piece.isGhost = false;
   
             nextPieces.push(piece);
@@ -983,25 +1071,25 @@ function getBlockColor (num) {
     let color = white;
 
     if (num == 1) {
-        color = green;
+        color = cyan;
     } 
     if (num == 2) {
-        color = red;
+        color = purple;
     } 
     if (num == 3) {
-        color = yellow;
+        color = orange;
     } 
     if (num == 4) {
         color = blue;
     } 
     if (num == 5) {
-        color = orange;
+        color = green;
     } 
     if (num == 6) {
-        color = purple;
+        color = red;
     } 
     if (num == 7) {
-        color = cyan;
+        color = yellow;
     } 
 
     return color;
@@ -1199,6 +1287,8 @@ function newEmptyRow () {
 
 
 // add UI elements before start
+stage.addChild(txtTitle);
+stage.addChild(txtNext);
 stage.addChild(txtScore);
 stage.addChild(txtLives);
 stage.addChild(txtLines);
@@ -1206,6 +1296,13 @@ stage.addChild(txtLevel);
 stage.addChild(txtPaused);
 stage.addChild(txtGameOver);
 stage.addChild(txtCredits);
+
+stage.addChild(txtHelpPause);
+stage.addChild(txtHelpReset);
+stage.addChild(txtHelpLeft);
+stage.addChild(txtHelpRight);
+stage.addChild(txtHelpRotate);
+stage.addChild(txtHelpHardDrop);
 
 // initialize activeBlock
 startNewBlock();
@@ -1288,7 +1385,7 @@ function update (ts) {
         lines += removed;
 
         // increase speed
-        gameTick *= acceleration;
+        // gameTick *= acceleration;
     }
 
     if (dead()) {
